@@ -1,0 +1,75 @@
+#!/usr/bin/env python
+#
+# Test the model of the Atlas robot
+#
+# To use it:
+#
+#     1) If floating base is not used (fbase = False):
+#            roslaunch valkyrie_oscr display-fixed.launch
+#        If floating base is used (fbase = True):
+#            roslaunch valkyrie_oscr display.launch
+#
+#     2) + Option 1 (interactive):
+#          roscd valkyrie_oscr/scripts/models; ipython -i model_parse
+#        + Option 2:
+#          rosrun valkyrie_oscr model_parse
+#
+
+
+import numpy as np
+from oscr.ros_robot import RosRobot
+from valkyrie_ros_robot import *
+
+if __name__ == '__main__':
+
+    # Whether floating base is used or not
+    fbase = True
+    # Frequency
+    f = 50.0
+    # Robot simulation instance
+    robot = ValkyrieRosRobot('valkyrieModelPy', f, fbase, 'pin')
+    # Print robot model information
+    robot.printModelInfo()
+
+    # Joint configuration
+    q = np.zeros((robot.ndof,1))
+    if (fbase):
+        q[2] = 1.172185
+        q[3] = 1.0
+    # Set the joint configuration to the robot
+    robot.update(q)
+
+    # Set feet on the ground (to be done just once)
+    # The first time that free floating is true, set q[2]=0 and uncomment this
+    # and set the dsole to the proper value. Then, see the value of q and
+    # replace it in q[2]. Finally, comment this out.
+    if (False):
+        dsole = 0.051054+0.037702; # From URDF: dist between ankle and sole
+        q = robot.model.setFeetOnGround("rightFoot", "leftFoot", dsole);
+        robot.update(q)
+
+    # Positions
+    position1 = robot.linkPosition('rightPalm')
+    position2 = robot.linkPosition('leftPalm')
+    print "Link l_hand position: ", position1.transpose()
+    print "Link r_hand position: ", position2.transpose()
+
+    # Ball markers
+    robot.initRobotBallMarkers(['RED','RED'], ['leftPalm','rightPalm'])
+    # Frame markers
+    robot.initRobotFrameMarkers([1.0, 1.0],['leftPalm','rightPalm'])
+
+    # Example of joint motion
+    for k in range(200):
+        q[robot.mjoint['leftShoulderPitch']] -= 0.005
+        q[robot.mjoint['leftShoulderRoll']] -= 0.005
+        q[robot.mjoint['leftShoulderYaw']] += 0.005
+        q[robot.mjoint['leftElbowPitch']] -= 0.005
+
+        q[robot.mjoint['rightShoulderPitch']] -= 0.005
+        q[robot.mjoint['rightShoulderRoll']] += 0.005
+        q[robot.mjoint['rightShoulderYaw']] += 0.005
+        q[robot.mjoint['rightElbowPitch']] += 0.005
+
+        robot.updateWithMarkers(q)
+        robot.rate.sleep()
