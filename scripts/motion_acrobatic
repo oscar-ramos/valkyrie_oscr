@@ -11,9 +11,11 @@
 
 from optparse import OptionParser
 import numpy as np
+import time
 
 import rospy
 from oscr.ros_kine_sim import RosKineSim
+from oscr.ros_logs import RosLogs
 from oscr.utils import incPosition, incPoseLocal
 
 from valkyrie_ros_robot import *
@@ -36,7 +38,7 @@ def raiseLeftFoot(t):
                                 (0.0, 0.0, 0.2),
                                 (0., (1., 0., 0.)))
     sim.task['LFoot'].setDesiredValue(desiredLFoot)
-    sim.task['LFoot'].setGain(0.3)
+    sim.task['LFoot'].setGain(0.6)
     sim.pushTask(sim.task['LFoot'])
 
 def moveHandsForward(t):
@@ -54,9 +56,9 @@ def moveHandsForward(t):
     desiredLFoot = incPosition(currentLFoot, [-1.0, 0.0, 0.64])
     sim.task['LFootPosition'].setDesiredValue(desiredLFoot)
     # Decrease gains
-    sim.task['LHand'].setGain(0.8)
-    sim.task['RHand'].setGain(0.8)
-    sim.task['LFootPosition'].setGain(0.8)
+    sim.task['LHand'].setGain(0.3)
+    sim.task['RHand'].setGain(0.3)
+    sim.task['LFootPosition'].setGain(0.3)
     # Push tasks
     sim.pushTask(sim.task['RHand'])
     sim.pushTask(sim.task['LHand'])
@@ -77,8 +79,8 @@ def moveHandsBackward(t):
     desiredLFoot = incPosition(currentLFoot, [1.0, 0.0, -0.64])
     sim.task['LFootPosition'].setDesiredValue(desiredLFoot)
     # Decrease gains
-    sim.task['LHand'].setGain(0.3)
-    sim.task['RHand'].setGain(0.3)
+    sim.task['LHand'].setGain(0.2)
+    sim.task['RHand'].setGain(0.2)
     sim.task['LFootPosition'].setGain(0.3)
 
 def lowerLeftFoot(t):
@@ -107,17 +109,22 @@ if __name__ == '__main__':
     parser.add_option("--solver", dest="solver", default="hqp",
                       help="solver can be hqp (default), ns (nullspace) or \
                       wqp (weighted qp")
+    parser.add_option("--log", dest="log", default="false",
+                      help="log can be back can be true, or false (default)")
     (options, args) = parser.parse_args()
     # Backend: 'pin' (default) or 'rbdl'
     backend = options.back
     # Solver
     solvertype = options.solver
-        
+    # Logs
+    if (options.log=='true'): do_logs = True
+    else: do_logs = False
+
     # Frequency
     f = 100.0
     # Robot simulation instance ('pin' or 'rbdl')
     sim = ValkyrieRosKineSim('naoMotion', f, True, backend,
-                             show_markers=True)
+                             show_markers=False)
 
     # Joint configuration
     q = [-0.018706, 0.0, 1.143354, 0.999688, 0.0, -0.024968, 0.0,
@@ -152,6 +159,14 @@ if __name__ == '__main__':
     sim.initKineTaskPose('neckYawLink','orientation','Head')
     sim.initKineTaskPose('pelvis','position','Base', show_markers=False)
 
+    # Logs
+    logs = RosLogs(sim.robot.pkg+'/data/', 'motion_acrob_', f, do_logs)
+    logs.addTask(sim.task['LHand'])
+    logs.addTask(sim.task['RHand'])
+    logs.addTask(sim.task['LFoot'])
+    logs.addTask(sim.task['LFootPosition'])
+    logs.addTask(sim.task['Base'])
+    
     # Add task to the solver
     sim.pushTask(sim.task['contactL'])
     sim.pushTask(sim.task['contactR'])
@@ -159,6 +174,8 @@ if __name__ == '__main__':
     state = 0
     t = 0.0
     while not rospy.is_shutdown():
+    # for i in range (3000):
+        logs.save(q)
         if (state==0):
             moveBase2Right(t)
             state = 1
@@ -190,10 +207,15 @@ if __name__ == '__main__':
                 sim.pushTask(sim.task['contactL'])
                 moveBase2Left(t)
                 state = 6
-                
+
+        tic = time.time()
         qdes = sim.getPositionControl(q)
+        toc = time.time()
         sim.update(qdes)
         # sim.update(q)
         q = qdes.copy()
         t += 1.0/f
+        # Save the computation time
+        logs.savetime(tic, toc, show=False)
         sim.rate.sleep()
+    logs.close()

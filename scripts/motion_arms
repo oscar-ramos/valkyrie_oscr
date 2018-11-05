@@ -4,8 +4,6 @@
 # operational points of the NAO robot
 #
 # To use it:
-#
-#     1) If floating base is used (default):
 #            roslaunch valkyrie_oscr display.launch
 #            rosrun valkyrie_oscr motion_arms
 #
@@ -13,9 +11,6 @@
 #            roscd valkyrie_oscr/scripts
 #            ipython -i motion_arms
 #
-#     2) If floating base is not used:
-#            roslaunch valkyrie_oscr display-fixed.launch
-#            rosrun valkyrie_oscr motion_arms --base fixed
 #
 #
 
@@ -37,10 +32,8 @@ if __name__ == '__main__':
     # Parse the arguments
     parser = OptionParser()
     parser.add_option("--back", dest="back", default="pin",
-                      help="back can be pin (default), rbdl, or ff6dof")
-    parser.add_option("--base", dest="base", default="floating",
-                      help="base can be floating (default) or fixed")
-    parser.add_option("--solver", dest="solver", default="hqp",
+                      help="back can be pin (default) or rbdl")
+    parser.add_option("--solver", dest="solver", default="wqp",
                       help="solver can be hqp (default), ns (nullspace) or \
                       wqp (weighted qp")
     parser.add_option("--log", dest="log", default="false",
@@ -48,10 +41,6 @@ if __name__ == '__main__':
     (options, args) = parser.parse_args()
     # Backend: 'pin' (default) or 'rbdl'
     backend = options.back
-    # Floating base? 'floating' (default) or 'fixed'
-    if (options.base=='floating'): fbase = True
-    elif (options.base=='fixed'): fbase = False
-    else: print 'Option not supported: use floating or fixed'
     # Solver
     solvertype = options.solver
     # Logs
@@ -60,21 +49,18 @@ if __name__ == '__main__':
         
     # Frequency
     f = 100.0
-    # Robot simulation instance ('pin' or 'rbdl')
-    sim = ValkyrieRosKineSim('naoMotion', f, fbase, backend)
+    # Robot simulation instance
+    sim = ValkyrieRosKineSim('naoMotion', f, True, backend)
 
     # Joint configuration
-    if (fbase):
-        q = [-0.018706, 0.0, 1.143354, 0.999688, 0.0, -0.024968, 0.0,
-             0.0, 0.0, -0.199764, 0.499411, -0.249705, 0.0,
-             0.0, 0.0, -0.199764, 0.499411, -0.249705, 0.0,
-             0.0,  0.049941, 0.0,
-             -0.78, -1.1, 1.48, -0.62, 0.0, 0.0, 0.0,
-             0., 0., 0.,
-             -0.78, 1.1, 1.48, 0.62, 0.0, 0.0, 0.0 ]
-        q = np.array([q]).T
-    else:
-        q = np.array([sim.robot.ndof*[0.,]]).T
+    q = [-0.018706, 0.0, 1.143354, 0.999688, 0.0, -0.024968, 0.0,
+         0.0, 0.0, -0.199764, 0.499411, -0.249705, 0.0,
+         0.0, 0.0, -0.199764, 0.499411, -0.249705, 0.0,
+         0.0,  0.049941, 0.0,
+         -0.78, -1.1, 1.48, -0.62, 0.0, 0.0, 0.0,
+         0., 0., 0.,
+         -0.78, 1.1, 1.48, 0.62, 0.0, 0.0, 0.0 ]
+    q = np.array([q]).T
     # Set the configuration to the robot
     sim.update(q)
 
@@ -83,59 +69,42 @@ if __name__ == '__main__':
     elif solvertype == 'ns': sim.initKineSolver(q, 'NS')
     elif solvertype == 'wqp': sim.initKineSolver(q, 'WQP')
     else: print 'Solver type not supported'
-            
-    if (fbase):
-        # Tasks
-        sim.initKineTaskPose('rightPalm','pose','RHand')
-        sim.initKineTaskPose('leftPalm','pose','LHand')
-        sim.initKineTaskPose('leftFoot','pose','LAnkle')
-        sim.initKineTaskPose('rightFoot','pose','RAnkle')
+       
+    # Tasks
+    sim.initKineTaskPose('rightPalm','pose','RHand')
+    sim.initKineTaskPose('leftPalm','pose','LHand')
+    sim.initKineTaskPose('leftFoot','pose','LAnkle')
+    sim.initKineTaskPose('rightFoot','pose','RAnkle')
 
-        # Logs
-        logs = RosLogs(sim.robot.pkg+'/data/', 'motion_arms_', f, do_logs)
-        logs.addTask(sim.task['LHand'])
-        logs.addTask(sim.task['RHand'])
-        
-        # Keep ankles without motion
-        sim.task['LAnkle'].keep(10.0)
-        sim.task['RAnkle'].keep(10.0)
+    # Logs
+    logs = RosLogs(sim.robot.pkg+'/data/', 'motion_arms_', f, do_logs)
+    logs.addTask(sim.task['LHand'])
+    logs.addTask(sim.task['RHand'])
+    
+    # Keep ankles without motion
+    sim.task['LAnkle'].keep(10.0)
+    sim.task['RAnkle'].keep(10.0)
 
-        # Set desired pose for the right hand
-        currentRHand = sim.task['RHand'].getSensedValue()
-        desiredRHand = incPoseLocal(currentRHand,
-                                    (0.20, -0.25, 0.08),
-                                    (-20., (1., 0., 0.)))
-        sim.task['RHand'].setDesiredValue(desiredRHand)
+    # Set desired pose for the right hand
+    currentRHand = sim.task['RHand'].getSensedValue()
+    desiredRHand = incPoseLocal(currentRHand,
+                                (0.20, -0.25, 0.08),
+                                (-20., (1., 0., 0.)))
+    sim.task['RHand'].setDesiredValue(desiredRHand)
 
-        # Set desired pose for the left hand
-        currentLHand = sim.task['LHand'].getSensedValue()
-        desiredLHand = incPoseLocal(currentLHand,
-                                    (-0.20, 0.25, 0.28),
-                                    (20., (1., 0., 0.)))
-        sim.task['LHand'].setDesiredValue(desiredLHand)
+    # Set desired pose for the left hand
+    currentLHand = sim.task['LHand'].getSensedValue()
+    desiredLHand = incPoseLocal(currentLHand,
+                                (-0.20, 0.25, 0.28),
+                                (20., (1., 0., 0.)))
+    sim.task['LHand'].setDesiredValue(desiredLHand)
 
-        # Add task to the solver
-        sim.pushTask(sim.task['LAnkle'])
-        sim.pushTask(sim.task['RAnkle'])
-        sim.pushTask(sim.task['RHand'])
-        sim.pushTask(sim.task['LHand'])
-
-    else:
-        # Tasks
-        sim.initKineTaskPose('r_wrist', 'position', 'RHand')
-        sim.initKineTaskPose('l_wrist', 'position', 'LHand')
-        # Set desired pose for the right hand
-        currentRHand = sim.task['RHand'].getSensedValue()
-        desiredRHand = incPosition(currentRHand, [-0.05, 0., 0.05])
-        sim.task['RHand'].setDesiredValue(desiredRHand)
-        # Set desired pose for the left hand
-        currentLHand = sim.task['LHand'].getSensedValue()
-        desiredLHand = incPosition(currentLHand, [-0.05, 0., 0.05])
-        sim.task['LHand'].setDesiredValue(desiredLHand)
-        # Add task to the solver
-        sim.pushTask(sim.task['RHand']);
-        sim.pushTask(sim.task['LHand']);
-
+    # Add task to the solver
+    sim.pushTask(sim.task['LAnkle'])
+    sim.pushTask(sim.task['RAnkle'])
+    sim.pushTask(sim.task['RHand'])
+    sim.pushTask(sim.task['LHand'])
+    
     while not rospy.is_shutdown():
         logs.save(q)
         tic = time.time()

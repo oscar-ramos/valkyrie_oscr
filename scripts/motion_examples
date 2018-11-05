@@ -29,7 +29,7 @@ if __name__ == '__main__':
     # Parse the arguments
     parser = OptionParser()
     parser.add_option("--back", dest="back", default="pin",
-                      help="back can be pin (default), rbdl, or ff6dof")
+                      help="back can be pin (default) or rbdl")
     parser.add_option("--mtype", dest="mtype", default="1",
                       help="type of motion: 1, 2, 3 4")
     parser.add_option("--solver", dest="solver", default="hqp",
@@ -122,7 +122,7 @@ if __name__ == '__main__':
         # Set desired pose for the base
         currentBase = sim.task['Base'].getSensedValue()
         desiredBase = incPoseLocal(currentBase,
-                                   (0.0, 0.20, -0.20),
+                                   (0.0, 0.20, -0.25),
                                    (0., (1., 0., 0.)))
         sim.task['Base'].setDesiredValue(desiredBase)
         # Set desired pose for the right hand
@@ -140,6 +140,7 @@ if __name__ == '__main__':
 
         
     while not rospy.is_shutdown():
+    # for i in range(500):
         qdes = sim.getPositionControl(q)
         sim.update(qdes)
         #sim.update(q)
